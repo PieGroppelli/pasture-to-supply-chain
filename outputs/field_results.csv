@@ -1,0 +1,7 @@
+field,year,area_ha,cloud_free_images,mean_ndvi,peak_ndvi,health,drought_stress_days,grass_yield_t_dm_ha,utilisable_dm_t,feed_energy_mj_nel_kg_dm,cows_supported_grazing_season,milk_from_pasture_kg_ecm,milk_from_pasture_litres,embedding_similarity_vs_other_year
+Field A - Viborg area,2018,7.78,32,0.598,0.685,Poor,73,5.1,29.76,5.96,19.5,39381,38233,0.9793317437978492
+Field B - Videbaek area,2018,7.38,35,0.688,0.789,Fair,68,5.64,31.25,6.26,20.4,43428,42163,0.9783353864119585
+Field C - Troldhede area,2018,7.4,36,0.713,0.805,Fair,70,5.71,31.68,6.34,20.7,44594,43296,0.937489603392833
+Field A - Viborg area,2019,7.78,27,0.607,0.656,Fair,24,6.27,36.6,5.99,23.9,48674,47256,0.9793317437978492
+Field B - Videbaek area,2019,7.38,33,0.693,0.783,Fair,28,7.19,39.81,6.28,26.0,55472,53856,0.9783353864119585
+Field C - Troldhede area,2019,7.4,30,0.652,0.889,Fair,25,6.78,37.63,6.14,24.6,51298,49804,0.937489603392833

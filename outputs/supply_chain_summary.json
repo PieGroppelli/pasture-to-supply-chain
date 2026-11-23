@@ -1,0 +1,29 @@
+{
+  "target_year": 2018,
+  "baseline_year": 2019,
+  "total_area_ha": 22.6,
+  "utilisable_grass_t_dm_target": 92.7,
+  "utilisable_grass_t_dm_baseline": 114.0,
+  "grass_change_pct": -18.7,
+  "milk_from_pasture_litres_target": 123692,
+  "milk_from_pasture_litres_baseline": 150916,
+  "milk_change_litres": -27224,
+  "extra_feed_needed_t_dm": 19.7,
+  "extra_feed_cost_eur": 5922,
+  "extra_cost_eur_per_1000_litres": 39.2,
+  "tanker_loads_change": -0.9,
+  "alert_months": [
+    "Jun",
+    "Jul",
+    "Aug"
+  ],
+  "first_alert_date": "2018-06-14",
+  "month_with_largest_milk_gap": "Jun",
+  "warning_days_before_end_of_worst_month": 16,
+  "missing_milk_as_cheese_t": 2.7,
+  "missing_milk_as_butter_t": 1.2,
+  "scaled_milk_change_litres_per_1000_ha": -1206400,
+  "scaled_extra_feed_cost_eur_per_1000_ha": 262413,
+  "scaled_tanker_loads_change_per_1000_ha": -40.2,
+  "scaled_missing_milk_as_cheese_t_per_1000_ha": 120.6
+}
