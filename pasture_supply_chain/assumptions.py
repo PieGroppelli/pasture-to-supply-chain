@@ -25,6 +25,11 @@ class Assumptions:
     t_opt_c: float = 10.0              # full growth potential above this temperature
     utilisation: float = 0.75          # share of grown dry matter actually eaten / harvested
 
+    # --- Drought stress (simple soil-water balance) --------------------------------
+    soil_water_capacity_mm: float = 80.0   # plant-available water in the root zone (sandy Jutland soils are low)
+    stress_threshold: float = 0.5          # growth starts to fall when soil water drops below 50% of capacity
+    hargreaves_coef: float = 0.0135        # reference evapotranspiration, Hargreaves radiation formula
+
     # --- Field health classes (mean NDVI in the grazing season) -------------------
     ndvi_good: float = 0.75
     ndvi_fair: float = 0.60
@@ -48,6 +53,11 @@ class Assumptions:
     replacement_feed_eur_per_kg_dm: float = 0.30
     tanker_capacity_litres: float = 30000.0
     low_growth_alert: float = 0.80         # flag months below 80% of the baseline year
+    alert_window_days: int = 30            # early warning: rolling 30-day grass growth vs baseline
+
+    # --- Dairy production (standard conversion, litres of milk per kg of product) ----
+    litres_per_kg_cheese: float = 10.0     # hard / semi-hard cheese
+    litres_per_kg_butter: float = 22.0     # butter (skimmed milk left over for other products)
 
     @property
     def maintenance_share(self) -> float:

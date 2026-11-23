@@ -39,14 +39,34 @@ def temperature_factor(t_mean_c, a: Assumptions):
     return np.clip((np.asarray(t_mean_c) - a.t_base_c) / (a.t_opt_c - a.t_base_c), 0.0, 1.0)
 
 
-def daily_growth_kg_dm_ha(ndvi, ssrd_j_m2, t_mean_c, a: Assumptions):
+def water_balance(ssrd_j_m2, t_mean_c, precip_mm, a: Assumptions):
+    """Daily soil-water bucket. Returns (water stress factor 0-1, soil water in mm).
+
+    Reference evapotranspiration (Hargreaves radiation formula):
+        ET0 = 0.0135 x (T + 17.8) x Rs, with Rs in mm of evaporation equivalent (MJ x 0.408)
+    The soil starts full on the first day of the season (winter recharge).
+    """
+    rs_mm = np.asarray(ssrd_j_m2) / 1e6 * 0.408
+    et0 = np.clip(a.hargreaves_coef * (np.asarray(t_mean_c) + 17.8) * rs_mm, 0.0, None)
+    p = np.asarray(precip_mm)
+    sw = a.soil_water_capacity_mm
+    factor, water = np.empty(len(p)), np.empty(len(p))
+    for i in range(len(p)):
+        f = min(sw / (a.stress_threshold * a.soil_water_capacity_mm), 1.0)
+        sw = float(np.clip(sw + p[i] - et0[i] * f, 0.0, a.soil_water_capacity_mm))
+        factor[i], water[i] = f, sw
+    return factor, water
+
+
+def daily_growth_kg_dm_ha(ndvi, ssrd_j_m2, t_mean_c, a: Assumptions, water_factor=1.0):
     """Daily grass growth in kg dry matter per hectare.
 
-    growth = RUE x fAPAR x PAR x temperature factor
+    growth = RUE x fAPAR x PAR x temperature factor x water stress factor
     1 g/m2 = 10 kg/ha
     """
     par_mj_m2 = np.asarray(ssrd_j_m2) / 1e6 * a.par_fraction
-    g_m2 = a.rue_g_dm_per_mj_par * fapar_from_ndvi(ndvi, a) * par_mj_m2 * temperature_factor(t_mean_c, a)
+    g_m2 = (a.rue_g_dm_per_mj_par * fapar_from_ndvi(ndvi, a) * par_mj_m2
+            * temperature_factor(t_mean_c, a) * np.asarray(water_factor))
     return g_m2 * 10.0
 
 
@@ -92,6 +112,7 @@ class FieldYear:
     peak_ndvi: float
     health: str
     dm_yield_t_ha: float
+    drought_days: int
     utilisable_dm_t: float
     feed_nel: float
     cows_supported: float
@@ -105,6 +126,7 @@ class FieldYear:
             "field": self.field, "year": self.year, "area_ha": round(self.area_ha, 2),
             "cloud_free_images": self.n_obs, "mean_ndvi": round(self.mean_ndvi, 3),
             "peak_ndvi": round(self.peak_ndvi, 3), "health": self.health,
+            "drought_stress_days": self.drought_days,
             "grass_yield_t_dm_ha": round(self.dm_yield_t_ha, 2),
             "utilisable_dm_t": round(self.utilisable_dm_t, 2),
             "feed_energy_mj_nel_kg_dm": round(self.feed_nel, 2),
@@ -123,8 +145,13 @@ def analyse_field_year(name: str, year: int, area_ha: float, ndvi_obs: pd.DataFr
     w = weather.assign(date=pd.to_datetime(weather["date"])).set_index("date").sort_index()
     w = w.reindex(ndvi.index).interpolate(method="time").bfill().ffill()
 
-    growth = daily_growth_kg_dm_ha(ndvi.values, w["ssrd_j_m2"].values, w["t_mean_c"].values, a)
-    daily = pd.DataFrame({"ndvi": ndvi.values, "growth_kg_dm_ha": growth}, index=ndvi.index)
+    if "precip_mm" in w:
+        wf, soil = water_balance(w["ssrd_j_m2"].values, w["t_mean_c"].values, w["precip_mm"].values, a)
+    else:
+        wf, soil = np.ones(len(w)), np.full(len(w), np.nan)
+    growth = daily_growth_kg_dm_ha(ndvi.values, w["ssrd_j_m2"].values, w["t_mean_c"].values, a, wf)
+    daily = pd.DataFrame({"ndvi": ndvi.values, "water_factor": wf, "soil_water_mm": soil,
+                          "growth_kg_dm_ha": growth}, index=ndvi.index)
 
     graze = daily.loc[f"{year}-{a.grazing_start}":f"{year}-{a.grazing_end}"]
     mean_ndvi = float(graze["ndvi"].mean())
@@ -144,6 +171,7 @@ def analyse_field_year(name: str, year: int, area_ha: float, ndvi_obs: pd.DataFr
         field=name, year=year, area_ha=area_ha, n_obs=int(len(ndvi_obs)),
         mean_ndvi=mean_ndvi, peak_ndvi=float(daily["ndvi"].max()),
         health=health_class(mean_ndvi, a), dm_yield_t_ha=dm_yield_t_ha,
+        drought_days=int((daily["water_factor"] < 0.5).sum()),
         utilisable_dm_t=utilisable_dm_kg / 1000.0, feed_nel=nel, cows_supported=cows,
         milk_ecm_kg=milk_ecm, milk_litres=milk_ecm / a.kg_per_litre,
         daily=daily, monthly=monthly,
@@ -182,6 +210,28 @@ def supply_chain_impact(target: list[FieldYear], baseline: list[FieldYear], a: A
     extra_feed_kg = missing_mj / a.replacement_feed_nel
     extra_cost = extra_feed_kg * a.replacement_feed_eur_per_kg_dm
 
+    # Early warning: first day the rolling grass growth of all fields falls below the alert
+    # threshold vs the baseline year, and how long before the month with the largest milk gap.
+    def daily_total(results):
+        g = sum(r.daily["growth_kg_dm_ha"].values * r.area_ha for r in results)
+        doy = results[0].daily.index.dayofyear
+        return pd.Series(g, index=doy)
+
+    gt, gb = daily_total(target), daily_total(baseline)
+    common = gt.index.intersection(gb.index)
+    w = a.alert_window_days
+    ratio = (gt.loc[common].rolling(w).sum() / gb.loc[common].rolling(w).sum()).dropna()
+    below = ratio[ratio < a.low_growth_alert]
+    year = target[0].year
+    alert_date = (pd.Timestamp(f"{year}-01-01") + pd.Timedelta(days=int(below.index[0]) - 1)) if len(below) else None
+
+    gap = monthly["milk_litres_target"] - monthly["milk_litres_baseline"]
+    worst_month = gap.idxmin() if gap.min() < 0 else None
+    lead_days = None
+    if alert_date is not None and worst_month is not None:
+        worst_end = pd.Timestamp(f"{worst_month} {year}") + pd.offsets.MonthEnd(0)
+        lead_days = max((worst_end - alert_date).days, 0)
+
     area = sum(r.area_ha for r in target)
     per_1000_ha = 1000 / area if area else 0.0
 
@@ -198,9 +248,18 @@ def supply_chain_impact(target: list[FieldYear], baseline: list[FieldYear], a: A
         "extra_cost_eur_per_1000_litres": round(extra_cost / milk_b * 1000, 1) if milk_b else None,
         "tanker_loads_change": round((milk_t - milk_b) / a.tanker_capacity_litres, 1),
         "alert_months": [m for m, flag in monthly["alert"].items() if flag],
+        "first_alert_date": alert_date.strftime("%Y-%m-%d") if alert_date is not None else None,
+        "month_with_largest_milk_gap": worst_month,
+        "warning_days_before_end_of_worst_month": lead_days,
+        # What the missing milk means for the dairies (equivalent volumes, one product at a time)
+        "missing_milk_as_cheese_t": round(max(milk_b - milk_t, 0) / a.litres_per_kg_cheese / 1000, 1),
+        "missing_milk_as_butter_t": round(max(milk_b - milk_t, 0) / a.litres_per_kg_butter / 1000, 1),
         # Same result scaled to a 1,000 ha milk-collection area, to read it at supply-chain level
         "scaled_milk_change_litres_per_1000_ha": round((milk_t - milk_b) * per_1000_ha),
         "scaled_extra_feed_cost_eur_per_1000_ha": round(extra_cost * per_1000_ha),
         "scaled_tanker_loads_change_per_1000_ha": round((milk_t - milk_b) * per_1000_ha / a.tanker_capacity_litres, 1),
+        "scaled_missing_milk_as_cheese_t_per_1000_ha": round(max(milk_b - milk_t, 0) * per_1000_ha / a.litres_per_kg_cheese / 1000, 1),
     }
+    monthly.attrs["growth_ratio"] = ratio
+    monthly.attrs["alert_date"] = alert_date
     return summary, monthly

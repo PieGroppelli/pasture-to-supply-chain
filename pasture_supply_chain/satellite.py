@@ -79,10 +79,10 @@ def ndvi_observations(geom: ee.Geometry, start: str, end: str,
 # Weather
 # ---------------------------------------------------------------------------
 def weather(geom: ee.Geometry, start: str, end: str) -> pd.DataFrame:
-    """Daily solar radiation (J/m2) and mean temperature (deg C) at the field centroid."""
+    """Daily solar radiation (J/m2), mean temperature (deg C) and precipitation (mm) at the field centroid."""
     point = geom.centroid(maxError=1)
     col = (ee.ImageCollection(ERA5).filterDate(start, end)
-           .select(["surface_solar_radiation_downwards_sum", "temperature_2m"]))
+           .select(["surface_solar_radiation_downwards_sum", "temperature_2m", "total_precipitation_sum"]))
 
     def per_image(img):
         v = img.reduceRegion(ee.Reducer.first(), point, 11132)
@@ -90,13 +90,15 @@ def weather(geom: ee.Geometry, start: str, end: str) -> pd.DataFrame:
             "date": img.date().format("YYYY-MM-dd"),
             "ssrd": v.get("surface_solar_radiation_downwards_sum"),
             "t2m": v.get("temperature_2m"),
+            "tp": v.get("total_precipitation_sum"),
         })
 
-    fc = ee.FeatureCollection(col.map(per_image)).filter(ee.Filter.notNull(["ssrd", "t2m"]))
-    rows = fc.reduceColumns(ee.Reducer.toList(3), ["date", "ssrd", "t2m"]).get("list").getInfo()
-    df = pd.DataFrame(rows, columns=["date", "ssrd_j_m2", "t2m_k"])
+    fc = ee.FeatureCollection(col.map(per_image)).filter(ee.Filter.notNull(["ssrd", "t2m", "tp"]))
+    rows = fc.reduceColumns(ee.Reducer.toList(4), ["date", "ssrd", "t2m", "tp"]).get("list").getInfo()
+    df = pd.DataFrame(rows, columns=["date", "ssrd_j_m2", "t2m_k", "tp_m"])
     df["t_mean_c"] = df["t2m_k"] - 273.15
-    return df[["date", "ssrd_j_m2", "t_mean_c"]]
+    df["precip_mm"] = df["tp_m"] * 1000
+    return df[["date", "ssrd_j_m2", "t_mean_c", "precip_mm"]]
 
 
 # ---------------------------------------------------------------------------

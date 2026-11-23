@@ -49,7 +49,8 @@ def ndvi_curves(results_target, results_baseline, path=None):
 
 
 def supply_chain_chart(monthly: pd.DataFrame, target_year: int, baseline_year: int, path=None):
-    fig, ax = plt.subplots(figsize=(9, 4))
+    """Top: monthly milk supported by the fields. Bottom: early-warning signal on grass growth."""
+    fig, (ax, ax2) = plt.subplots(2, 1, figsize=(9, 7), gridspec_kw={"height_ratios": [3, 2]})
     x = range(len(monthly))
     w = 0.4
     ax.bar([i - w / 2 for i in x], monthly["milk_litres_baseline"] / 1000, w, color=GREY, label=str(baseline_year))
@@ -60,6 +61,21 @@ def supply_chain_chart(monthly: pd.DataFrame, target_year: int, baseline_year: i
     ax.set_title("Monthly milk supported by the fields (red = growth below alert threshold)")
     ax.legend()
     ax.grid(axis="y", alpha=0.3)
+
+    ratio = monthly.attrs.get("growth_ratio")
+    alert = monthly.attrs.get("alert_date")
+    if ratio is not None and len(ratio):
+        dates = pd.Timestamp(f"{target_year}-01-01") + pd.to_timedelta(ratio.index - 1, unit="D")
+        ax2.plot(dates, ratio.values * 100, color=BLUE)
+        ax2.axhline(80, color=RED, linestyle="--", linewidth=1, label="alert threshold (80%)")
+        if alert is not None:
+            ax2.axvline(alert, color=RED, linewidth=1.5)
+            ax2.annotate(f"first alert {alert:%d %b}", (alert, ax2.get_ylim()[1]), xytext=(5, -15),
+                         textcoords="offset points", color=RED, fontsize=9)
+        ax2.set_ylabel(f"30-day grass growth\n% of {baseline_year}")
+        ax2.set_title("Early warning from satellite and weather data")
+        ax2.legend(loc="lower left")
+        ax2.grid(alpha=0.3)
     fig.tight_layout()
     if path:
         fig.savefig(path, dpi=150)
