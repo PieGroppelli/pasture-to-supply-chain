@@ -41,6 +41,75 @@ def load_fields(path: str) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Automatic selection of grassland parcels
+# ---------------------------------------------------------------------------
+DYNAMIC_WORLD = "GOOGLE/DYNAMICWORLD/V1"
+WORLDCOVER = "ESA/WorldCover/v200"
+UTM_DK = "EPSG:32632"
+
+
+def find_grassland_fields(areas: dict, years: tuple, out_path: str, radius_m: int = 8000,
+                          min_ha: float = 3.0, max_ha: float = 20.0, min_compactness: float = 0.35) -> list[dict]:
+    """Pick one compact grassland parcel near each location and save them as GeoJSON.
+
+    A pixel counts as grassland only if
+      - Google Dynamic World classifies it as 'grass' (most frequent class, May-September) in every year given, and
+      - ESA WorldCover 2021 classifies it as grassland.
+    Patches are cleaned (no thin strips), shrunk by 10 m to avoid mixed edge pixels,
+    and the largest compact patch between min_ha and max_ha is kept.
+
+    areas: {"Viborg area": (lon, lat), ...}
+    """
+    features = []
+    for label, (lon, lat) in areas.items():
+        region = ee.Geometry.Point([lon, lat]).buffer(radius_m)
+
+        def grass_in(year):
+            dw = (ee.ImageCollection(DYNAMIC_WORLD).filterBounds(region)
+                  .filterDate(f"{year}-05-01", f"{year}-09-30").select("label"))
+            return dw.mode().eq(2)                       # 2 = grass
+
+        mask = ee.ImageCollection(WORLDCOVER).first().select("Map").eq(30)   # 30 = grassland
+        for y in years:
+            mask = mask.And(grass_in(y))
+        mask = (mask.reproject(crs=UTM_DK, scale=10)
+                .focalMin(radius=1, kernelType="square", units="pixels")
+                .focalMax(radius=1, kernelType="square", units="pixels"))
+
+        patches = mask.selfMask().toInt().reduceToVectors(
+            geometry=region, crs=UTM_DK, scale=10, geometryType="polygon",
+            eightConnected=False, maxPixels=1e9, bestEffort=True)
+
+        def describe(f):
+            g = f.geometry().buffer(-10, 1)
+            area = g.area(1)
+            perim = g.perimeter(1)
+            compact = area.multiply(4 * 3.141592653589793).divide(perim.multiply(perim).max(1))
+            return ee.Feature(g, {"area_ha": area.divide(1e4), "compactness": compact})
+
+        candidates = (patches.map(describe)
+                      .filter(ee.Filter.rangeContains("area_ha", min_ha, max_ha))
+                      .filter(ee.Filter.gte("compactness", min_compactness))
+                      .sort("area_ha", False))
+        if candidates.size().getInfo() == 0:
+            print(f"no grassland parcel found near {label}; try a larger radius")
+            continue
+        best = ee.Feature(candidates.first())
+        geom = best.geometry().simplify(5).transform("EPSG:4326", 1).getInfo()
+        props = best.toDictionary(["area_ha", "compactness"]).getInfo()
+        name = f"Pasture {chr(65 + len(features))} - {label}"
+        features.append({"type": "Feature", "geometry": geom,
+                         "properties": {"name": name, "area_ha": round(props["area_ha"], 2),
+                                        "compactness": round(props["compactness"], 2),
+                                        "selected_by": "Dynamic World grass (all years) + ESA WorldCover grassland"}})
+        print(f"{name}: {props['area_ha']:.1f} ha")
+
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump({"type": "FeatureCollection", "features": features}, f, indent=1)
+    return features
+
+
+# ---------------------------------------------------------------------------
 # NDVI time series
 # ---------------------------------------------------------------------------
 def _ndvi_features(collection: str, geom: ee.Geometry, start: str, end: str) -> pd.DataFrame:

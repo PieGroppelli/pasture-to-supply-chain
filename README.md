@@ -7,17 +7,19 @@ it supports, and then translates a bad season into what it means for the supply 
 less milk to collect, less cheese or butter the dairies can make, extra feed to buy, and how
 many weeks of warning planners get before the worst month.
 
-The test case compares **2018, the drought year in Denmark, with 2019**, on three example
-grassland parcels in Jutland.
+The test case compares **2018, the drought year in Denmark, with 2019**, on three grassland
+parcels in Jutland. The parcels are not drawn by hand: the code picks them automatically where
+Google Dynamic World sees grass in both years and ESA WorldCover maps grassland.
 
 > Proof of concept. The satellite and weather data are real; the agronomic and cost
 > parameters are typical literature values collected in one file and clearly marked as
-> assumptions. The fields are example parcels and are not linked to any specific farm.
+> assumptions. The parcels are chosen from public land-cover data and are not linked to any specific farm.
 
 ## What it does
 
 | Step | Question | Data / method |
 |---|---|---|
+| 0. Find pastures | Where are real grazing fields? | Dynamic World "grass" in every year + ESA WorldCover grassland, compact patches of 3-20 ha |
 | 1. See the field | What does the field look like? | Sentinel-2 true-colour and NDVI summer composites |
 | 2. Field health | Is the grass healthy this season? | Cloud-masked Sentinel-2 NDVI time series → Good / Fair / Poor |
 | 3. Land change | Did the field change character between years (ploughed, reseeded, new use)? | Cosine similarity of Google AlphaEarth satellite embeddings |
@@ -48,7 +50,8 @@ pip install -r requirements.txt
 python -c "from pasture_supply_chain.run import run; run('your-ee-project', 'fields/example_fields.geojson', 2018, 2019)"
 ```
 
-Your own fields: draw polygons on [geojson.io](https://geojson.io), give each one a `name`
+Fields: by default the notebook picks one grassland parcel near each location in `AREAS`.
+To use your own fields instead, draw polygons on [geojson.io](https://geojson.io), give each one a `name`
 property and save the file in `fields/`. Danish field boundaries are also published by
 the Danish Agricultural Agency (Markkort).
 
