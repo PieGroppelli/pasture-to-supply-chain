@@ -15,6 +15,27 @@ Google Dynamic World sees grass in both years and ESA WorldCover maps grassland.
 > parameters are typical literature values collected in one file and clearly marked as
 > assumptions. The parcels are chosen from public land-cover data and are not linked to any specific farm.
 
+## Results: 2018 drought vs 2019 (three grassland parcels, 24.1 ha)
+
+| | 2019 | 2018 | Change |
+|---|---|---|---|
+| Utilisable grass (t DM) | 135.2 | 104.8 | -22.5% |
+| Days with drought stress (avg. per field) | 26 | 71 | +45 days |
+| Milk supported by the pasture (litres) | 183,114 | 135,156 | -26.2% |
+| Extra bought-in feed to keep milk stable | | 34.8 t DM, approx. €10,400 | approx. €57 per 1,000 L |
+
+- **Early warning:** rolling 30-day grass growth fell below 80% of the normal year on **14 June 2018**;
+  June, July and August were all flagged.
+- Milk falls more than grass because the drought also lowers the energy value of the grass.
+- **Scaled to a 1,000 ha collection area:** about 2 million litres less milk, around 66 fewer
+  tanker loads (30,000 L) and roughly 200 t less cheese-equivalent.
+- All three parcels were healthier in 2019 than in 2018, consistent with the long dry spell
+  of summer 2018.
+
+![Field maps](outputs/field_maps.png)
+![NDVI curves](outputs/ndvi_curves.png)
+![Supply chain](outputs/supply_chain.png)
+
 ## What it does
 
 | Step | Question | Data / method |
@@ -47,7 +68,7 @@ Locally:
 
 ```bash
 pip install -r requirements.txt
-python -c "from pasture_supply_chain.run import run; run('your-ee-project', 'fields/example_fields.geojson', 2018, 2019)"
+python -c "from pasture_supply_chain.run import run; run('your-ee-project', 'fields/pastures.geojson', 2018, 2019)"
 ```
 
 Fields: by default the notebook picks one grassland parcel near each location in `AREAS`.
