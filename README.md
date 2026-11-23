@@ -1,0 +1,88 @@
+# From satellite to supply chain: pasture health, milk and logistics impact
+
+A small independent project that follows dairy from the field to the supply chain.
+Using free satellite and weather data, it checks how healthy a set of grazing fields is,
+estimates how much grass they grow, how many cows that grass can feed and how much milk
+it supports, and then translates a bad season into what it means for the supply chain:
+less milk to collect, extra feed to buy, and the months when planners should expect a dip.
+
+The test case compares **2018, the drought year in Denmark, with 2019**, on three example
+grassland parcels in Jutland.
+
+> Proof of concept. The satellite and weather data are real; the agronomic and cost
+> parameters are typical literature values collected in one file and clearly marked as
+> assumptions. The fields are example parcels and are not linked to any specific farm.
+
+## What it does
+
+| Step | Question | Data / method |
+|---|---|---|
+| 1. See the field | What does the field look like? | Sentinel-2 true-colour and NDVI summer composites |
+| 2. Field health | Is the grass healthy this season? | Cloud-masked Sentinel-2 NDVI time series → Good / Fair / Poor |
+| 3. Land change | Did the field change character between years (ploughed, reseeded, new use)? | Cosine similarity of Google AlphaEarth satellite embeddings |
+| 4. Grass growth | How much dry matter does it grow? | Light-use-efficiency model: RUE × fAPAR(NDVI) × PAR × temperature (ERA5-Land) |
+| 5. Cows | How many cows can graze it? | Utilisable dry matter ÷ (daily intake × pasture share × grazing days) |
+| 6. Milk | How much milk does that grass support, and how good is the feed? | Feed energy (MJ NEL/kg DM) from NDVI → energy-corrected milk |
+| 7. Supply chain | What does a bad year cost and change? | Missing milk, extra bought-in feed and cost per 1,000 L, tanker loads, monthly alerts |
+
+## Outputs
+
+- `field_maps.png`: true colour and NDVI for each field, with the health class
+- `ndvi_curves.png`: NDVI through the season, target year vs baseline year
+- `supply_chain.png`: monthly milk supported by the fields, low-growth months in red
+- `field_results.csv`, `monthly_supply_chain.csv`, `supply_chain_summary.json`
+
+## Run it
+
+Easiest is Google Colab: open `notebooks/run_in_colab.ipynb`, add your free
+[Earth Engine](https://code.earthengine.google.com/register) project ID and run the cells.
+
+Locally:
+
+```bash
+pip install -r requirements.txt
+python -c "from pasture_supply_chain.run import run; run('your-ee-project', 'fields/example_fields.geojson', 2018, 2019)"
+```
+
+Your own fields: draw polygons on [geojson.io](https://geojson.io), give each one a `name`
+property and save the file in `fields/`. Danish field boundaries are also published by
+the Danish Agricultural Agency (Markkort).
+
+## Tests
+
+The calculation layer has no Earth Engine dependency and is tested offline with synthetic data:
+
+```bash
+pytest
+```
+
+## Project structure
+
+```
+pasture_supply_chain/
+  assumptions.py   every non-measured parameter, in one place
+  satellite.py     Earth Engine: Sentinel-2 NDVI, ERA5-Land weather, AlphaEarth embeddings, images
+  model.py         grass growth, health, cows, milk and supply-chain impact (pure Python)
+  report.py        charts
+  run.py           end-to-end pipeline
+fields/            example field polygons (GeoJSON)
+notebooks/         Colab notebook
+tests/             offline tests
+```
+
+## Limitations and next steps
+
+- NDVI saturates in very dense grass and is only a proxy for feed quality; real deployment
+  would calibrate against grass samples and actual milk recordings.
+- Milk composition (fat, protein) is not predicted; feed energy is used as the quality signal.
+- Weather comes from a ~9 km grid, so local rainfall differences are smoothed out.
+- Next steps: calibrate on farms with known yields, add soil moisture, run it at the scale
+  of a whole milk-collection area, and connect the monthly forecast to collection planning.
+
+## Data sources
+
+- Sentinel-2 Level-2A / Level-1C, Copernicus (ESA) via Google Earth Engine
+- ERA5-Land daily aggregates, ECMWF / Copernicus Climate Change Service
+- Satellite Embedding V1 (AlphaEarth Foundations), Google
+
+Author: Pietro Groppelli, M.Sc. Operations and Innovation Management, Aalborg University

@@ -1,0 +1,20 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {"name": "Field A - Viborg area"},
+      "geometry": {"type": "Polygon", "coordinates": [[[9.3812, 56.4310], [9.3855, 56.4312], [9.3850, 56.4285], [9.3808, 56.4283], [9.3812, 56.4310]]]}
+    },
+    {
+      "type": "Feature",
+      "properties": {"name": "Field B - Videbaek area"},
+      "geometry": {"type": "Polygon", "coordinates": [[[8.6210, 56.0820], [8.6250, 56.0822], [8.6245, 56.0795], [8.6205, 56.0793], [8.6210, 56.0820]]]}
+    },
+    {
+      "type": "Feature",
+      "properties": {"name": "Field C - Troldhede area"},
+      "geometry": {"type": "Polygon", "coordinates": [[[8.8910, 55.9920], [8.8950, 55.9922], [8.8945, 55.9895], [8.8905, 55.9893], [8.8910, 55.9920]]]}
+    }
+  ]
+}
